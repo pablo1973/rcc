@@ -1,0 +1,1144 @@
+diff --git a/src/api/types.ts b/src/api/types.ts
+new file mode 100644
+--- /dev/null
++++ b/src/api/types.ts
+@@ -0,0 +1,124 @@
++/**
++ * RCC Public API Types
++ * v1.0.0-DAY10
++ * 
++ * Public type definitions for RCC consumers
++ */
++
++// ─────────────────────────────────────────────────────────────
++// Input Types
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Input message for RCC processing
++ */
++export interface RCCInput {
++  /** Raw message text to analyze */
++  text: string;
++  /** Optional metadata for context */
++  meta?: Record<string, unknown>;
++}
++
++// ─────────────────────────────────────────────────────────────
++// State Types
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Detected emotional state of the input
++ */
++export type RCCState = 'CALM' | 'NEUTRAL' | 'TENSE';
++
++/**
++ * Reason for the state classification
++ */
++export type RCCReason = 
++  | 'LOW_INTENSITY'
++  | 'BASELINE'
++  | 'HIGH_INTENSITY'
++  | 'INVALID_INPUT';
++
++// ─────────────────────────────────────────────────────────────
++// Action Types
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Regulation action to apply
++ */
++export type RCCAction = 'PASSTHROUGH' | 'SOFTEN' | 'SUMMARIZE' | 'PAUSE';
++
++/**
++ * Output channel for routing
++ */
++export type RCCChannel = 'TEXT' | 'COOLDOWN';
++
++// ─────────────────────────────────────────────────────────────
++// Result Types
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Analysis result from analyze()
++ */
++export interface RCCAnalysisResult {
++  /** Detected emotional state */
++  state: RCCState;
++  /** Confidence score (0-1) */
++  score: number;
++  /** Reason for classification */
++  reason: RCCReason;
++}
++
++/**
++ * Regulation result from regulate()
++ */
++export interface RCCRegulationResult {
++  /** Analysis of input */
++  analysis: RCCAnalysisResult;
++  /** Action taken */
++  action: RCCAction;
++  /** Processed message */
++  message: string;
++  /** Preserved metadata */
++  meta: Record<string, unknown>;
++}
++
++/**
++ * Full pipeline result from run()
++ */
++export interface RCCResult {
++  /** Analysis of input */
++  analysis: RCCAnalysisResult;
++  /** Regulation applied */
++  regulation: {
++    action: RCCAction;
++    message: string;
++  };
++  /** Routing decision */
++  routing: {
++    channel: RCCChannel;
++  };
++  /** Preserved metadata */
++  meta: Record<string, unknown>;
++}
++
++// ─────────────────────────────────────────────────────────────
++// Error Types
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Error codes for RCC operations
++ */
++export type RCCErrorCode =
++  | 'INVALID_INPUT'
++  | 'INPUT_TOO_LONG'
++  | 'ANALYSIS_FAILED'
++  | 'REGULATION_FAILED'
++  | 'ROUTING_FAILED';
++
++/**
++ * Structured error information
++ */
++export interface RCCErrorInfo {
++  code: RCCErrorCode;
++  message: string;
++  details?: Record<string, unknown>;
++}
+
+diff --git a/src/api/errors.ts b/src/api/errors.ts
+new file mode 100644
+--- /dev/null
++++ b/src/api/errors.ts
+@@ -0,0 +1,127 @@
++/**
++ * RCC Public API Errors
++ * v1.0.0-DAY10
++ * 
++ * Typed error classes for RCC operations
++ */
++
++import { RCCErrorCode, RCCErrorInfo } from './types';
++
++/**
++ * Base error class for all RCC errors
++ */
++export class RCCError extends Error {
++  public readonly code: RCCErrorCode;
++  public readonly details?: Record<string, unknown>;
++
++  constructor(code: RCCErrorCode, message: string, details?: Record<string, unknown>) {
++    super(message);
++    this.name = 'RCCError';
++    this.code = code;
++    this.details = details;
++    
++    // Maintains proper stack trace in V8
++    if (Error.captureStackTrace) {
++      Error.captureStackTrace(this, RCCError);
++    }
++  }
++
++  /**
++   * Converts error to structured info object
++   */
++  toInfo(): RCCErrorInfo {
++    return {
++      code: this.code,
++      message: this.message,
++      details: this.details
++    };
++  }
++
++  /**
++   * Converts error to JSON-serializable object
++   */
++  toJSON(): RCCErrorInfo {
++    return this.toInfo();
++  }
++}
++
++/**
++ * Error thrown when input is invalid (null, undefined, non-string)
++ */
++export class InvalidInputError extends RCCError {
++  constructor(message: string = 'Input must be a non-empty string', details?: Record<string, unknown>) {
++    super('INVALID_INPUT', message, details);
++    this.name = 'InvalidInputError';
++  }
++}
++
++/**
++ * Error thrown when input exceeds maximum length
++ */
++export class InputTooLongError extends RCCError {
++  public readonly maxLength: number;
++  public readonly actualLength: number;
++
++  constructor(actualLength: number, maxLength: number) {
++    super(
++      'INPUT_TOO_LONG',
++      `Input length ${actualLength} exceeds maximum ${maxLength}`,
++      { actualLength, maxLength }
++    );
++    this.name = 'InputTooLongError';
++    this.maxLength = maxLength;
++    this.actualLength = actualLength;
++  }
++}
++
++/**
++ * Error thrown when analysis fails
++ */
++export class AnalysisError extends RCCError {
++  constructor(message: string = 'Analysis failed', details?: Record<string, unknown>) {
++    super('ANALYSIS_FAILED', message, details);
++    this.name = 'AnalysisError';
++  }
++}
++
++/**
++ * Error thrown when regulation fails
++ */
++export class RegulationError extends RCCError {
++  constructor(message: string = 'Regulation failed', details?: Record<string, unknown>) {
++    super('REGULATION_FAILED', message, details);
++    this.name = 'RegulationError';
++  }
++}
++
++/**
++ * Error thrown when routing fails
++ */
++export class RoutingError extends RCCError {
++  constructor(message: string = 'Routing failed', details?: Record<string, unknown>) {
++    super('ROUTING_FAILED', message, details);
++    this.name = 'RoutingError';
++  }
++}
++
++/**
++ * Type guard to check if an error is an RCCError
++ */
++export function isRCCError(error: unknown): error is RCCError {
++  return error instanceof RCCError;
++}
++
++/**
++ * Wraps unknown errors in RCCError
++ */
++export function wrapError(error: unknown, defaultCode: RCCErrorCode = 'ANALYSIS_FAILED'): RCCError {
++  if (isRCCError(error)) {
++    return error;
++  }
++  
++  if (error instanceof Error) {
++    return new RCCError(defaultCode, error.message, { originalError: error.name });
++  }
++  
++  return new RCCError(defaultCode, String(error));
++}
+
+diff --git a/src/api/index.ts b/src/api/index.ts
+new file mode 100644
+--- /dev/null
++++ b/src/api/index.ts
+@@ -0,0 +1,251 @@
++/**
++ * RCC Public API
++ * v1.0.0-DAY10
++ * 
++ * Public facade for RCC (Regulador Cognitivo Conversacional)
++ * 
++ * @example
++ * ```typescript
++ * import { analyze, regulate, run } from 'rcc';
++ * 
++ * // Full pipeline
++ * const result = run({ text: 'Hello world' });
++ * 
++ * // Analysis only
++ * const analysis = analyze({ text: 'Hello world' });
++ * 
++ * // Analysis + regulation
++ * const regulated = regulate({ text: 'Hello world' });
++ * ```
++ */
++
++import { analyze as coreAnalyze } from '../core/analyzer';
++import { regulate as coreRegulate } from '../core/regulator';
++import { route as coreRoute } from '../core/router';
++
++import {
++  RCCInput,
++  RCCAnalysisResult,
++  RCCRegulationResult,
++  RCCResult,
++  RCCState,
++  RCCReason,
++  RCCAction,
++  RCCChannel
++} from './types';
++
++import {
++  RCCError,
++  InvalidInputError,
++  AnalysisError,
++  RegulationError,
++  RoutingError,
++  isRCCError,
++  wrapError
++} from './errors';
++
++// ─────────────────────────────────────────────────────────────
++// Constants
++// ─────────────────────────────────────────────────────────────
++
++/** Maximum allowed input length */
++export const MAX_INPUT_LENGTH = 10000;
++
++/** RCC version */
++export const VERSION = '1.0.0';
++
++// ─────────────────────────────────────────────────────────────
++// Input Validation
++// ─────────────────────────────────────────────────────────────
++
++function validateInput(input: RCCInput | string): string {
++  // Handle string shorthand
++  const text = typeof input === 'string' ? input : input?.text;
++  
++  // Validate type
++  if (text === null || text === undefined) {
++    throw new InvalidInputError('Input text is required');
++  }
++  
++  if (typeof text !== 'string') {
++    throw new InvalidInputError('Input text must be a string', { 
++      receivedType: typeof text 
++    });
++  }
++  
++  return text;
++}
++
++function extractMeta(input: RCCInput | string): Record<string, unknown> {
++  if (typeof input === 'string') {
++    return {};
++  }
++  return input?.meta ?? {};
++}
++
++// ─────────────────────────────────────────────────────────────
++// Public API
++// ─────────────────────────────────────────────────────────────
++
++/**
++ * Analyzes input text and returns emotional state classification
++ * 
++ * @param input - Text to analyze (string or RCCInput object)
++ * @returns Analysis result with state, score, reason, and metrics
++ * @throws {InvalidInputError} If input is invalid
++ * @throws {AnalysisError} If analysis fails
++ * 
++ * @example
++ * ```typescript
++ * const result = analyze({ text: 'Hello world' });
++ * console.log(result.state);  // 'CALM' | 'NEUTRAL' | 'TENSE'
++ * console.log(result.score);  // 0-1
++ * ```
++ */
++export function analyze(input: RCCInput | string): RCCAnalysisResult {
++  try {
++    const text = validateInput(input);
++    const result = coreAnalyze(text);
++    
++    return {
++      state: result.state as RCCState,
++      score: result.score,
++      reason: result.reason as RCCReason
++    };
++  } catch (error) {
++    if (isRCCError(error)) throw error;
++    throw new AnalysisError('Analysis failed', { 
++      originalError: error instanceof Error ? error.message : String(error) 
++    });
++  }
++}
++
++/**
++ * Analyzes and regulates input text
++ * 
++ * @param input - Text to regulate (string or RCCInput object)
++ * @returns Regulation result with analysis, action, and processed message
++ * @throws {InvalidInputError} If input is invalid
++ * @throws {AnalysisError} If analysis fails
++ * @throws {RegulationError} If regulation fails
++ * 
++ * @example
++ * ```typescript
++ * const result = regulate({ text: 'ANGRY MESSAGE!!!' });
++ * console.log(result.action);   // 'SOFTEN'
++ * console.log(result.message);  // processed message
++ * ```
++ */
++export function regulate(input: RCCInput | string): RCCRegulationResult {
++  try {
++    const text = validateInput(input);
++    const meta = extractMeta(input);
++    
++    // Run analysis
++    const analysisResult = coreAnalyze(text);
++    
++    // Run regulation
++    const regulationResult = coreRegulate(analysisResult, text);
++    
++    return {
++      analysis: {
++        state: analysisResult.state as RCCState,
++        score: analysisResult.score,
++        reason: analysisResult.reason as RCCReason
++      },
++      action: regulationResult.action as RCCAction,
++      message: regulationResult.message,
++      meta
++    };
++  } catch (error) {
++    if (isRCCError(error)) throw error;
++    throw new RegulationError('Regulation failed', { 
++      originalError: error instanceof Error ? error.message : String(error) 
++    });
++  }
++}
++
++/**
++ * Runs full RCC pipeline: analyze → regulate → route
++ * 
++ * @param input - Text to process (string or RCCInput object)
++ * @returns Full pipeline result with analysis, regulation, and routing
++ * @throws {InvalidInputError} If input is invalid
++ * @throws {AnalysisError} If analysis fails
++ * @throws {RegulationError} If regulation fails
++ * @throws {RoutingError} If routing fails
++ * 
++ * @example
++ * ```typescript
++ * const result = run({ text: 'Hello world', meta: { userId: '123' } });
++ * console.log(result.analysis.state);    // 'CALM'
++ * console.log(result.regulation.action); // 'PASSTHROUGH'
++ * console.log(result.routing.channel);   // 'TEXT'
++ * console.log(result.meta);              // { userId: '123' }
++ * ```
++ */
++export function run(input: RCCInput | string): RCCResult {
++  try {
++    const text = validateInput(input);
++    const meta = extractMeta(input);
++    
++    // Run analysis
++    const analysisResult = coreAnalyze(text);
++    
++    // Run regulation
++    const regulationResult = coreRegulate(analysisResult, text);
++    
++    // Run routing
++    const routingResult = coreRoute(regulationResult);
++    
++    return {
++      analysis: {
++        state: analysisResult.state as RCCState,
++        score: analysisResult.score,
++        reason: analysisResult.reason as RCCReason
++      },
++      regulation: {
++        action: regulationResult.action as RCCAction,
++        message: regulationResult.message
++      },
++      routing: {
++        channel: routingResult.channel as RCCChannel
++      },
++      meta
++    };
++  } catch (error) {
++    if (isRCCError(error)) throw error;
++    throw new RoutingError('Pipeline failed', { 
++      originalError: error instanceof Error ? error.message : String(error) 
++    });
++  }
++}
++
++// ─────────────────────────────────────────────────────────────
++// Re-exports
++// ─────────────────────────────────────────────────────────────
++
++// Types
++export type {
++  RCCInput,
++  RCCAnalysisResult,
++  RCCRegulationResult,
++  RCCResult,
++  RCCState,
++  RCCReason,
++  RCCAction,
++  RCCChannel,
++  RCCErrorCode,
++  RCCErrorInfo
++} from './types';
++
++// Errors
++export {
++  RCCError,
++  InvalidInputError,
++  AnalysisError,
++  RegulationError,
++  RoutingError,
++  isRCCError,
++  wrapError
++} from './errors';
+
+diff --git a/docs/API.md b/docs/API.md
+new file mode 100644
+--- /dev/null
++++ b/docs/API.md
+@@ -0,0 +1,340 @@
++# RCC Public API
++
++**Version:** 1.0.0  
++**Status:** Stable  
++
++## Overview
++
++RCC (Regulador Cognitivo Conversacional) provides a deterministic pipeline for analyzing, regulating, and routing conversational messages based on emotional tone.
++
++```
++Input → analyze() → regulate() → route() → Output
++```
++
++## Installation
++
++```typescript
++import { analyze, regulate, run } from 'rcc/api';
++```
++
++## Quick Start
++
++```typescript
++// Full pipeline (recommended)
++const result = run({ text: 'Hello world' });
++
++// Analysis only
++const analysis = analyze('Hello world');
++
++// Analysis + regulation
++const regulated = regulate({ text: 'Hello world' });
++```
++
++---
++
++## Functions
++
++### `analyze(input)`
++
++Analyzes input text and returns emotional state classification.
++
++**Signature:**
++```typescript
++function analyze(input: RCCInput | string): RCCAnalysisResult
++```
++
++**Parameters:**
++| Name | Type | Description |
++|------|------|-------------|
++| `input` | `RCCInput \| string` | Text to analyze |
++
++**Returns:** `RCCAnalysisResult`
++
++**Example:**
++```typescript
++const result = analyze({ text: 'Hello world' });
++// {
++//   state: 'CALM',
++//   score: 0.15,
++//   reason: 'LOW_INTENSITY'
++// }
++```
++
++---
++
++### `regulate(input)`
++
++Analyzes and applies regulation to input text.
++
++**Signature:**
++```typescript
++function regulate(input: RCCInput | string): RCCRegulationResult
++```
++
++**Parameters:**
++| Name | Type | Description |
++|------|------|-------------|
++| `input` | `RCCInput \| string` | Text to regulate |
++
++**Returns:** `RCCRegulationResult`
++
++**Example:**
++```typescript
++const result = regulate({ text: 'ANGRY MESSAGE!!!' });
++// {
++//   analysis: { state: 'TENSE', score: 0.85, ... },
++//   action: 'SOFTEN',
++//   message: 'ANGRY MESSAGE!!!',
++//   meta: {}
++// }
++```
++
++---
++
++### `run(input)`
++
++Executes full RCC pipeline: analyze → regulate → route.
++
++**Signature:**
++```typescript
++function run(input: RCCInput | string): RCCResult
++```
++
++**Parameters:**
++| Name | Type | Description |
++|------|------|-------------|
++| `input` | `RCCInput \| string` | Text to process |
++
++**Returns:** `RCCResult`
++
++**Example:**
++```typescript
++const result = run({ 
++  text: 'Hello world',
++  meta: { userId: '123' }
++});
++// {
++//   analysis: { state: 'CALM', score: 0.15, ... },
++//   regulation: { action: 'PASSTHROUGH', message: 'Hello world' },
++//   routing: { channel: 'TEXT' },
++//   meta: { userId: '123' }
++// }
++```
++
++---
++
++## Types
++
++### Input Types
++
++#### `RCCInput`
++```typescript
++interface RCCInput {
++  text: string;                    // Required: message text
++  meta?: Record<string, unknown>;  // Optional: preserved metadata
++}
++```
++
++### State Types
++
++#### `RCCState`
++```typescript
++type RCCState = 'CALM' | 'NEUTRAL' | 'TENSE';
++```
++
++| State | Score Range | Description |
++|-------|-------------|-------------|
++| `CALM` | `< 0.3` | Low emotional intensity |
++| `NEUTRAL` | `0.3 - 0.69` | Mixed or moderate signals |
++| `TENSE` | `≥ 0.7` | High emotional intensity |
++
++#### `RCCReason`
++```typescript
++type RCCReason = 'LOW_INTENSITY' | 'BASELINE' | 'HIGH_INTENSITY' | 'INVALID_INPUT';
++```
++
++### Action Types
++
++#### `RCCAction`
++```typescript
++type RCCAction = 'PASSTHROUGH' | 'SOFTEN' | 'SUMMARIZE' | 'PAUSE';
++```
++
++| Action | Trigger | Description |
++|--------|---------|-------------|
++| `PASSTHROUGH` | CALM/NEUTRAL | No modification needed |
++| `SOFTEN` | TENSE | Recommend tone softening |
++| `SUMMARIZE` | (future) | Recommend summarization |
++| `PAUSE` | (future) | Recommend cooldown |
++
++#### `RCCChannel`
++```typescript
++type RCCChannel = 'TEXT' | 'COOLDOWN';
++```
++
++| Channel | Trigger | Description |
++|---------|---------|-------------|
++| `TEXT` | Default | Normal text output |
++| `COOLDOWN` | PAUSE action | Delay before delivery |
++
++### Result Types
++
++#### `RCCAnalysisResult`
++```typescript
++interface RCCAnalysisResult {
++  state: RCCState;
++  score: number;          // 0-1
++  reason: RCCReason;
++}
++```
++
++#### `RCCRegulationResult`
++```typescript
++interface RCCRegulationResult {
++  analysis: RCCAnalysisResult;
++  action: RCCAction;
++  message: string;
++  meta: Record<string, unknown>;
++}
++```
++
++#### `RCCResult`
++```typescript
++interface RCCResult {
++  analysis: RCCAnalysisResult;
++  regulation: {
++    action: RCCAction;
++    message: string;
++  };
++  routing: {
++    channel: RCCChannel;
++  };
++  meta: Record<string, unknown>;
++}
++```
++
++---
++
++## Error Handling
++
++### Error Types
++
++```typescript
++import { 
++  RCCError, 
++  InvalidInputError,
++  AnalysisError,
++  RegulationError,
++  RoutingError,
++  isRCCError 
++} from 'rcc/api';
++```
++
++#### `RCCError` (base class)
++```typescript
++class RCCError extends Error {
++  code: RCCErrorCode;
++  details?: Record<string, unknown>;
++  toInfo(): RCCErrorInfo;
++  toJSON(): RCCErrorInfo;
++}
++```
++
++#### Error Codes
++```typescript
++type RCCErrorCode =
++  | 'INVALID_INPUT'      // Input validation failed
++  | 'INPUT_TOO_LONG'     // Exceeds MAX_INPUT_LENGTH
++  | 'ANALYSIS_FAILED'    // Analysis error
++  | 'REGULATION_FAILED'  // Regulation error
++  | 'ROUTING_FAILED';    // Routing error
++```
++
++### Error Handling Example
++
++```typescript
++import { run, isRCCError, InvalidInputError } from 'rcc/api';
++
++try {
++  const result = run({ text: userInput });
++  // process result
++} catch (error) {
++  if (error instanceof InvalidInputError) {
++    console.error('Invalid input:', error.message);
++  } else if (isRCCError(error)) {
++    console.error(`RCC Error [${error.code}]:`, error.message);
++  } else {
++    throw error;
++  }
++}
++```
++
++---
++
++## Constants
++
++```typescript
++import { MAX_INPUT_LENGTH, VERSION } from 'rcc/api';
++
++MAX_INPUT_LENGTH  // 10000 characters
++VERSION           // '1.0.0'
++```
++
++---
++
++## Pipeline Behavior
++
++### State → Action Mapping
++
++| State | Action |
++|-------|--------|
++| CALM | PASSTHROUGH |
++| NEUTRAL | PASSTHROUGH |
++| TENSE | SOFTEN |
++
++### Action → Channel Mapping
++
++| Action | Channel |
++|--------|---------|
++| PASSTHROUGH | TEXT |
++| SOFTEN | TEXT |
++| SUMMARIZE | TEXT |
++| PAUSE | COOLDOWN |
++
++---
++
++## Determinism Guarantee
++
++RCC is **fully deterministic**:
++- Same input → Same output (always)
++- No randomness
++- No external dependencies
++- No side effects
++
++This enables:
++- Reliable testing
++- Reproducible results
++- Predictable behavior
++
++---
++
++## Limits
++
++| Limit | Value |
++|-------|-------|
++| Max input length | 10,000 characters |
++| Min input length | 0 (returns INVALID_INPUT reason) |
++
++---
++
++## Thread Safety
++
++RCC functions are stateless and thread-safe. Multiple concurrent calls with different inputs will not interfere.
++
++---
++
++## Version History
++
++| Version | Date | Changes |
++|---------|------|---------|
++| 1.0.0 | 2025-12-23 | Initial stable release |
+
+diff --git a/src/__tests__/api/api.test.ts b/src/__tests__/api/api.test.ts
+new file mode 100644
+--- /dev/null
++++ b/src/__tests__/api/api.test.ts
+@@ -0,0 +1,273 @@
++/**
++ * API Tests
++ * RCC v1.0.0-DAY10
++ * 
++ * Tests for public API facade
++ */
++
++import {
++  analyze,
++  regulate,
++  run,
++  MAX_INPUT_LENGTH,
++  VERSION,
++  RCCError,
++  InvalidInputError,
++  isRCCError
++} from '../../api';
++
++describe('API: analyze()', () => {
++
++  // ─────────────────────────────────────────────────────────────
++  // Basic functionality
++  // ─────────────────────────────────────────────────────────────
++  describe('basic functionality', () => {
++    test('accepts string input', () => {
++      const result = analyze('hello world');
++      expect(result).toHaveProperty('state');
++      expect(result).toHaveProperty('score');
++      expect(result).toHaveProperty('reason');
++    });
++
++    test('accepts RCCInput object', () => {
++      const result = analyze({ text: 'hello world' });
++      expect(result).toHaveProperty('state');
++    });
++
++    test('returns valid state', () => {
++      const result = analyze('hello world');
++      expect(['CALM', 'NEUTRAL', 'TENSE']).toContain(result.state);
++    });
++
++    test('returns score between 0 and 1', () => {
++      const result = analyze('hello world');
++      expect(result.score).toBeGreaterThanOrEqual(0);
++      expect(result.score).toBeLessThanOrEqual(1);
++    });
++
++    test('returns valid reason', () => {
++      const result = analyze('hello world');
++      expect(['LOW_INTENSITY', 'BASELINE', 'HIGH_INTENSITY', 'INVALID_INPUT']).toContain(result.reason);
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // State detection
++  // ─────────────────────────────────────────────────────────────
++  describe('state detection', () => {
++    test('detects CALM for lowercase', () => {
++      const result = analyze('hello world');
++      expect(result.state).toBe('CALM');
++    });
++
++    test('detects TENSE for uppercase', () => {
++      const result = analyze('AAAA');
++      expect(result.state).toBe('TENSE');
++    });
++
++    test('detects NEUTRAL for mixed case', () => {
++      const result = analyze('Hello WORLD Test MESSAGE');
++      expect(['NEUTRAL', 'CALM', 'TENSE']).toContain(result.state);
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // Error handling
++  // ─────────────────────────────────────────────────────────────
++  describe('error handling', () => {
++    test('throws InvalidInputError for null', () => {
++      expect(() => analyze(null as any)).toThrow(InvalidInputError);
++    });
++
++    test('throws InvalidInputError for undefined', () => {
++      expect(() => analyze(undefined as any)).toThrow(InvalidInputError);
++    });
++
++    test('throws InvalidInputError for number', () => {
++      expect(() => analyze(123 as any)).toThrow(InvalidInputError);
++    });
++
++    test('error is RCCError', () => {
++      try {
++        analyze(null as any);
++      } catch (error) {
++        expect(isRCCError(error)).toBe(true);
++      }
++    });
++
++    test('error has code', () => {
++      try {
++        analyze(null as any);
++      } catch (error) {
++        expect((error as RCCError).code).toBe('INVALID_INPUT');
++      }
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // Determinism
++  // ─────────────────────────────────────────────────────────────
++  describe('determinism', () => {
++    test('same input produces same output', () => {
++      const r1 = analyze('test input');
++      const r2 = analyze('test input');
++      expect(r1).toEqual(r2);
++    });
++  });
++});
++
++describe('API: regulate()', () => {
++
++  // ─────────────────────────────────────────────────────────────
++  // Basic functionality
++  // ─────────────────────────────────────────────────────────────
++  describe('basic functionality', () => {
++    test('returns analysis', () => {
++      const result = regulate('hello world');
++      expect(result).toHaveProperty('analysis');
++      expect(result.analysis).toHaveProperty('state');
++    });
++
++    test('returns action', () => {
++      const result = regulate('hello world');
++      expect(result).toHaveProperty('action');
++      expect(['PASSTHROUGH', 'SOFTEN', 'SUMMARIZE', 'PAUSE']).toContain(result.action);
++    });
++
++    test('returns message', () => {
++      const result = regulate('hello world');
++      expect(result).toHaveProperty('message');
++      expect(typeof result.message).toBe('string');
++    });
++
++    test('returns meta', () => {
++      const result = regulate('hello world');
++      expect(result).toHaveProperty('meta');
++    });
++
++    test('preserves meta from input', () => {
++      const result = regulate({ text: 'hello', meta: { userId: '123' } });
++      expect(result.meta).toEqual({ userId: '123' });
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // Action mapping
++  // ─────────────────────────────────────────────────────────────
++  describe('action mapping', () => {
++    test('CALM state produces PASSTHROUGH', () => {
++      const result = regulate('hello world');
++      expect(result.analysis.state).toBe('CALM');
++      expect(result.action).toBe('PASSTHROUGH');
++    });
++
++    test('TENSE state produces SOFTEN', () => {
++      const result = regulate('AAAA');
++      expect(result.analysis.state).toBe('TENSE');
++      expect(result.action).toBe('SOFTEN');
++    });
++  });
++});
++
++describe('API: run()', () => {
++
++  // ─────────────────────────────────────────────────────────────
++  // Basic functionality
++  // ─────────────────────────────────────────────────────────────
++  describe('basic functionality', () => {
++    test('returns analysis', () => {
++      const result = run('hello world');
++      expect(result).toHaveProperty('analysis');
++    });
++
++    test('returns regulation', () => {
++      const result = run('hello world');
++      expect(result).toHaveProperty('regulation');
++      expect(result.regulation).toHaveProperty('action');
++      expect(result.regulation).toHaveProperty('message');
++    });
++
++    test('returns routing', () => {
++      const result = run('hello world');
++      expect(result).toHaveProperty('routing');
++      expect(result.routing).toHaveProperty('channel');
++    });
++
++    test('returns meta', () => {
++      const result = run('hello world');
++      expect(result).toHaveProperty('meta');
++    });
++
++    test('preserves meta', () => {
++      const result = run({ text: 'hello', meta: { key: 'value' } });
++      expect(result.meta).toEqual({ key: 'value' });
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // Full pipeline
++  // ─────────────────────────────────────────────────────────────
++  describe('full pipeline', () => {
++    test('CALM flow: PASSTHROUGH → TEXT', () => {
++      const result = run('hello world');
++      expect(result.analysis.state).toBe('CALM');
++      expect(result.regulation.action).toBe('PASSTHROUGH');
++      expect(result.routing.channel).toBe('TEXT');
++    });
++
++    test('TENSE flow: SOFTEN → TEXT', () => {
++      const result = run('AAAA');
++      expect(result.analysis.state).toBe('TENSE');
++      expect(result.regulation.action).toBe('SOFTEN');
++      expect(result.routing.channel).toBe('TEXT');
++    });
++  });
++
++  // ─────────────────────────────────────────────────────────────
++  // Determinism
++  // ─────────────────────────────────────────────────────────────
++  describe('determinism', () => {
++    test('same input produces same output', () => {
++      const r1 = run('test input');
++      const r2 = run('test input');
++      expect(r1.analysis).toEqual(r2.analysis);
++      expect(r1.regulation).toEqual(r2.regulation);
++      expect(r1.routing).toEqual(r2.routing);
++    });
++  });
++});
++
++describe('API: Constants', () => {
++  test('MAX_INPUT_LENGTH is 10000', () => {
++    expect(MAX_INPUT_LENGTH).toBe(10000);
++  });
++
++  test('VERSION is defined', () => {
++    expect(VERSION).toBe('1.0.0');
++  });
++});
++
++describe('API: Errors', () => {
++  test('RCCError has toInfo()', () => {
++    const error = new InvalidInputError('test');
++    const info = error.toInfo();
++    expect(info).toHaveProperty('code');
++    expect(info).toHaveProperty('message');
++  });
++
++  test('RCCError has toJSON()', () => {
++    const error = new InvalidInputError('test');
++    const json = error.toJSON();
++    expect(json.code).toBe('INVALID_INPUT');
++  });
++
++  test('isRCCError returns true for RCCError', () => {
++    const error = new InvalidInputError('test');
++    expect(isRCCError(error)).toBe(true);
++  });
++
++  test('isRCCError returns false for regular Error', () => {
++    const error = new Error('test');
++    expect(isRCCError(error)).toBe(false);
++  });
++});
